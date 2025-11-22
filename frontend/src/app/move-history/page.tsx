@@ -8,7 +8,6 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Search, List, LayoutGrid, Download } from 'lucide-react';
 import { useToast } from '@/components/ui/use-toast';
-import Link from 'next/link';
 
 export default function MoveHistoryPage() {
   const [history, setHistory] = useState([]);
@@ -22,12 +21,12 @@ export default function MoveHistoryPage() {
 
   const fetchHistory = async () => {
     try {
-      const response = await api.get('/move-history?limit=200');
+      const response = await api.get('/move-history?limit=100');
       setHistory(response.data.data);
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.response?.data?.message || 'Failed to load transaction history',
+        description: error.response?.data?.message || 'Failed to load move history',
         variant: 'destructive',
       });
     } finally {
@@ -39,73 +38,31 @@ export default function MoveHistoryPage() {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
-      item.reference_number?.toLowerCase().includes(term) ||
-      item.contact_name?.toLowerCase().includes(term) ||
-      item.from_location?.toLowerCase().includes(term) ||
-      item.to_location?.toLowerCase().includes(term) ||
       item.product_name?.toLowerCase().includes(term) ||
+      item.warehouse_name?.toLowerCase().includes(term) ||
       item.transaction_type?.toLowerCase().includes(term)
     );
   });
 
-  const getStatusColor = (status: string) => {
-    if (!status) return 'bg-gray-100 text-gray-800';
-    switch (status.toLowerCase()) {
-      case 'done':
-      case 'validated':
-      case 'completed':
-        return 'bg-green-100 text-green-800';
-      case 'ready':
-        return 'bg-yellow-100 text-yellow-800';
-      case 'waiting':
-        return 'bg-orange-100 text-orange-800';
-      case 'draft':
-      case 'pending':
-        return 'bg-blue-100 text-blue-800';
-      case 'cancelled':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-blue-100 text-blue-800';
-    }
+  const isInbound = (type: string) => {
+    return type === 'receipt' || type === 'transfer_in' || type === 'adjustment' && 
+           history.find((h: any) => h.id === (history as any).find((x: any) => x.transaction_type === type)?.id)?.quantity_change > 0;
   };
 
-  const getStatusLabel = (status: string) => {
-    if (!status) return 'N/A';
-    switch (status.toLowerCase()) {
-      case 'draft':
-        return 'Draft';
-      case 'waiting':
-        return 'Waiting';
-      case 'ready':
-        return 'Ready';
-      case 'done':
-      case 'validated':
-      case 'completed':
-        return 'Done';
-      case 'pending':
-        return 'Pending';
-      default:
-        return status;
+  const getRowColor = (item: any) => {
+    if (item.transaction_type === 'receipt' || item.transaction_type === 'transfer_in') {
+      return 'bg-green-50';
     }
-  };
-
-  const getDetailLink = (item: any) => {
-    if (item.transaction_type === 'receipt') {
-      return `/receipts/${item.reference_id}`;
-    } else if (item.transaction_type === 'delivery') {
-      return `/delivery-orders/${item.reference_id}`;
-    } else if (item.transaction_type === 'transfer_out' || item.transaction_type === 'transfer_in') {
-      return `/transfers/${item.reference_id}`;
-    } else if (item.transaction_type === 'adjustment') {
-      return `/adjustments/${item.reference_id}`;
+    if (item.transaction_type === 'delivery' || item.transaction_type === 'transfer_out') {
+      return 'bg-red-50';
     }
-    return null;
+    return '';
   };
 
   return (
     <div className="p-8">
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-3xl font-bold">Transaction History</h1>
+        <h1 className="text-3xl font-bold">Move History</h1>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="icon">
             <Search className="h-4 w-4" />
@@ -126,7 +83,7 @@ export default function MoveHistoryPage() {
       {/* Search */}
       <div className="mb-4">
         <Input
-          placeholder="Search by reference, contact, from, to..."
+          placeholder="Search by product, warehouse, or transaction type..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-md"
@@ -145,12 +102,12 @@ export default function MoveHistoryPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Reference</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Contact</TableHead>
                   <TableHead>From</TableHead>
                   <TableHead>To</TableHead>
-                  <TableHead>Contact</TableHead>
-                  <TableHead>Schedule Date</TableHead>
+                  <TableHead>Quantity</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -162,33 +119,42 @@ export default function MoveHistoryPage() {
                   </TableRow>
                 ) : (
                   filteredHistory.map((item: any) => {
-                    const detailLink = getDetailLink(item);
+                    // Use reference_number from backend, fallback to generated reference
+                    const reference = item.reference_number || (
+                      item.transaction_type === 'receipt' 
+                        ? `WH/IN/${item.reference_id.toString().padStart(4, '0')}`
+                        : item.transaction_type === 'delivery'
+                        ? `WH/OUT/${item.reference_id.toString().padStart(4, '0')}`
+                        : item.transaction_type === 'transfer_out' || item.transaction_type === 'transfer_in'
+                        ? `WH/TRF/${item.reference_id.toString().padStart(4, '0')}`
+                        : `WH/ADJ/${item.reference_id.toString().padStart(4, '0')}`
+                    );
+
+                    // Get contact name from backend or use default
+                    const contactName = item.contact_name || item.performed_by_name || 'System';
+
                     return (
-                      <TableRow key={item.id}>
-                        <TableCell className="font-medium">
-                          {item.reference_number || `WH/${item.transaction_type.toUpperCase()}/${item.reference_id.toString().padStart(4, '0')}`}
-                        </TableCell>
-                        <TableCell>{item.from_location || 'N/A'}</TableCell>
-                        <TableCell>{item.to_location || 'N/A'}</TableCell>
-                        <TableCell>{item.contact_name || item.performed_by_name || 'N/A'}</TableCell>
+                      <TableRow key={item.id} className={getRowColor(item)}>
+                        <TableCell className="font-medium">{reference}</TableCell>
+                        <TableCell>{new Date(item.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell>{contactName}</TableCell>
                         <TableCell>
-                          {item.schedule_date
-                            ? new Date(item.schedule_date).toLocaleDateString()
-                            : new Date(item.created_at).toLocaleDateString()}
+                          {item.transaction_type === 'receipt' || item.transaction_type === 'transfer_in'
+                            ? 'External'
+                            : item.warehouse_name}
                         </TableCell>
                         <TableCell>
-                          <span className={`px-2 py-1 rounded text-xs ${getStatusColor(item.status)}`}>
-                            {getStatusLabel(item.status)}
+                          {item.transaction_type === 'delivery' || item.transaction_type === 'transfer_out'
+                            ? 'External'
+                            : item.warehouse_name}
+                        </TableCell>
+                        <TableCell className={item.quantity_change >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {item.quantity_change >= 0 ? '+' : ''}{item.quantity_change}
+                        </TableCell>
+                        <TableCell>
+                          <span className="px-2 py-1 rounded text-xs bg-blue-100 text-blue-800">
+                            {item.transaction_type}
                           </span>
-                        </TableCell>
-                        <TableCell>
-                          {detailLink ? (
-                            <Button variant="outline" size="sm" asChild>
-                              <Link href={detailLink}>View</Link>
-                            </Button>
-                          ) : (
-                            <span className="text-muted-foreground text-sm">-</span>
-                          )}
                         </TableCell>
                       </TableRow>
                     );

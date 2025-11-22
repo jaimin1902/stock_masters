@@ -20,6 +20,7 @@ import transferRoutes from './routes/transferRoutes.js'
 import adjustmentRoutes from './routes/adjustmentRoutes.js'
 import moveHistoryRoutes from './routes/moveHistoryRoutes.js'
 import supplierRoutes from './routes/supplierRoutes.js'
+import locationRoutes from './routes/locationRoutes.js'
   
 dotenv.config();
   
@@ -100,6 +101,7 @@ app.use('/api/transfers', transferRoutes);
 app.use('/api/adjustments', adjustmentRoutes);
 app.use('/api/move-history', moveHistoryRoutes);
 app.use('/api/suppliers', supplierRoutes);
+app.use('/api/locations', locationRoutes);
 
 // app.get("*", (req, res) => {
 //   res.status(404).json({

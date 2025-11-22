@@ -17,6 +17,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -27,26 +34,47 @@ const warehouseSchema = z.object({
   address: z.string().optional(),
 });
 
+const locationSchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  code: z.string().min(1, 'Short Code is required'),
+  warehouse_id: z.string().min(1, 'Warehouse is required'),
+});
+
 type WarehouseForm = z.infer<typeof warehouseSchema>;
+type LocationForm = z.infer<typeof locationSchema>;
 
 export default function SettingsPage() {
   const [warehouses, setWarehouses] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'warehouses' | 'locations'>('warehouses');
   const { toast } = useToast();
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isWarehouseDialogOpen, setIsWarehouseDialogOpen] = useState(false);
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
 
   const {
-    register,
-    handleSubmit,
-    formState: { errors },
-    reset,
+    register: registerWarehouse,
+    handleSubmit: handleSubmitWarehouse,
+    formState: { errors: warehouseErrors },
+    reset: resetWarehouse,
   } = useForm<WarehouseForm>({
     resolver: zodResolver(warehouseSchema),
   });
 
+  const {
+    register: registerLocation,
+    handleSubmit: handleSubmitLocation,
+    formState: { errors: locationErrors },
+    reset: resetLocation,
+    setValue: setLocationValue,
+    watch: watchLocation,
+  } = useForm<LocationForm>({
+    resolver: zodResolver(locationSchema),
+  });
+
   useEffect(() => {
     fetchWarehouses();
+    fetchLocations();
   }, []);
 
   const fetchWarehouses = async () => {
@@ -64,20 +92,55 @@ export default function SettingsPage() {
     }
   };
 
-  const onSubmit = async (data: WarehouseForm) => {
+  const fetchLocations = async () => {
+    try {
+      const response = await api.get('/locations');
+      setLocations(response.data.data);
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to load locations',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const onSubmitWarehouse = async (data: WarehouseForm) => {
     try {
       await api.post('/warehouses', data);
       toast({
         title: 'Success',
         description: 'Warehouse created successfully',
       });
-      setIsDialogOpen(false);
-      reset();
+      setIsWarehouseDialogOpen(false);
+      resetWarehouse();
       fetchWarehouses();
     } catch (error: any) {
       toast({
         title: 'Error',
         description: error.response?.data?.message || 'Failed to create warehouse',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const onSubmitLocation = async (data: LocationForm) => {
+    try {
+      await api.post('/locations', {
+        ...data,
+        warehouse_id: parseInt(data.warehouse_id),
+      });
+      toast({
+        title: 'Success',
+        description: 'Location created successfully',
+      });
+      setIsLocationDialogOpen(false);
+      resetLocation();
+      fetchLocations();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.response?.data?.message || 'Failed to create location',
         variant: 'destructive',
       });
     }
@@ -122,41 +185,41 @@ export default function SettingsPage() {
                 <CardTitle>Warehouse Management</CardTitle>
                 <CardDescription>Manage warehouse details and locations</CardDescription>
               </div>
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Dialog open={isWarehouseDialogOpen} onOpenChange={setIsWarehouseDialogOpen}>
                 <DialogTrigger asChild>
                   <Button>
                     <Plus className="mr-2 h-4 w-4" />
                     Add Warehouse
                   </Button>
                 </DialogTrigger>
-                <DialogContent>
+                <DialogContent className="bg-white">
                   <DialogHeader>
-                    <DialogTitle>Add New Warehouse</DialogTitle>
+                    <DialogTitle>Warehouse</DialogTitle>
                     <DialogDescription>
                       Create a new warehouse with name, code, and address.
                     </DialogDescription>
                   </DialogHeader>
-                  <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                  <form onSubmit={handleSubmitWarehouse(onSubmitWarehouse)} className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="name">Name</Label>
-                      <Input id="name" {...register('name')} placeholder="Warehouse Name" />
-                      {errors.name && (
-                        <p className="text-sm text-destructive">{errors.name.message}</p>
+                      <Label htmlFor="warehouse-name">Name</Label>
+                      <Input id="warehouse-name" {...registerWarehouse('name')} placeholder="Enter warehouse name" />
+                      {warehouseErrors.name && (
+                        <p className="text-sm text-destructive">{warehouseErrors.name.message}</p>
                       )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="code">Short Code</Label>
-                      <Input id="code" {...register('code')} placeholder="WH" />
-                      {errors.code && (
-                        <p className="text-sm text-destructive">{errors.code.message}</p>
+                      <Label htmlFor="warehouse-code">Short Code</Label>
+                      <Input id="warehouse-code" {...registerWarehouse('code')} placeholder="Enter short code" />
+                      {warehouseErrors.code && (
+                        <p className="text-sm text-destructive">{warehouseErrors.code.message}</p>
                       )}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="address">Address</Label>
-                      <Input id="address" {...register('address')} placeholder="Warehouse Address" />
+                      <Label htmlFor="warehouse-address">Address</Label>
+                      <Input id="warehouse-address" {...registerWarehouse('address')} placeholder="Enter address" />
                     </div>
                     <div className="flex justify-end gap-2">
-                      <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
+                      <Button type="button" variant="outline" onClick={() => setIsWarehouseDialogOpen(false)}>
                         Cancel
                       </Button>
                       <Button type="submit">Create</Button>
@@ -211,19 +274,113 @@ export default function SettingsPage() {
           <CardHeader>
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle>Location Management</CardTitle>
-                <CardDescription>Manage locations within warehouses (rooms, racks, etc.)</CardDescription>
+                <CardTitle>location</CardTitle>
+                <CardDescription>This holds the multiple locations of warehouse, rooms etc..</CardDescription>
               </div>
-              <Button disabled>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Location
-              </Button>
+              <Dialog open={isLocationDialogOpen} onOpenChange={setIsLocationDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add Location
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="bg-white">
+                  <DialogHeader>
+                    <DialogTitle>location</DialogTitle>
+                    <DialogDescription>
+                      Create a new location within a warehouse.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleSubmitLocation(onSubmitLocation)} className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="location-name">Name</Label>
+                      <Input id="location-name" {...registerLocation('name')} placeholder="Enter location name" />
+                      {locationErrors.name && (
+                        <p className="text-sm text-destructive">{locationErrors.name.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="location-code">Short Code</Label>
+                      <Input id="location-code" {...registerLocation('code')} placeholder="Enter short code" />
+                      {locationErrors.code && (
+                        <p className="text-sm text-destructive">{locationErrors.code.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="location-warehouse">warehouse</Label>
+                      <Select
+                        value={watchLocation('warehouse_id')}
+                        onValueChange={(value) => setLocationValue('warehouse_id', value)}
+                      >
+                        <SelectTrigger id="location-warehouse">
+                          <SelectValue placeholder="Select warehouse" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {warehouses.map((warehouse: any) => (
+                            <SelectItem key={warehouse.id} value={warehouse.id.toString()}>
+                              {warehouse.code} - {warehouse.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {locationErrors.warehouse_id && (
+                        <p className="text-sm text-destructive">{locationErrors.warehouse_id.message}</p>
+                      )}
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={() => setIsLocationDialogOpen(false)}>
+                        Cancel
+                      </Button>
+                      <Button type="submit">Create</Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
             </div>
           </CardHeader>
           <CardContent>
-            <p className="text-muted-foreground">
-              Location management feature coming soon. This will allow you to manage multiple locations within warehouses.
-            </p>
+            {loading ? (
+              <div>Loading...</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Warehouse</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {locations.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center text-muted-foreground">
+                        No locations found
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    locations.map((location: any) => (
+                      <TableRow key={location.id}>
+                        <TableCell className="font-medium">{location.code}</TableCell>
+                        <TableCell>{location.name}</TableCell>
+                        <TableCell>{location.warehouse_name} ({location.warehouse_code})</TableCell>
+                        <TableCell>
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            location.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {location.is_active ? 'Active' : 'Inactive'}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="outline" size="sm">Edit</Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            )}
           </CardContent>
         </Card>
       )}
