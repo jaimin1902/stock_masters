@@ -11,6 +11,14 @@ export const errorMiddleware = (
   
   err.message||= "Internal Server Error";
   err.statusCode = err.statusCode || 500;
+  
+  // Log error details in development
+  if (envMode === "DEVELOPMENT") {
+    console.error('Error:', err.message);
+    console.error('Stack:', err.stack);
+    console.error('Request URL:', req.originalUrl);
+    console.error('Request Method:', req.method);
+  }
     
   const response = {
     success: false,
@@ -18,7 +26,11 @@ export const errorMiddleware = (
   };
   
   if (envMode === "DEVELOPMENT") {
-    response.error = err;
+    response.error = {
+      message: err.message,
+      stack: err.stack,
+      ...err
+    };
   }
   
   return res.status(err.statusCode).json(response);
